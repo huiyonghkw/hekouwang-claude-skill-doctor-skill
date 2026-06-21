@@ -16,20 +16,47 @@
 
 ## 用法
 
-这是一个 **Claude Code Skill——用自然语言喊它就行**，Claude 会自动加载本 skill、在底层跑机检、再做定性复核，最后给你评分卡 + 修复建议，并问要不要代为重构：
+### 在 Claude Code 里（推荐）
+
+直接用**自然语言**喊它，Claude 会自动加载本 skill、在底层跑机检、再做定性复核，给评分卡 + 按优先级的修复建议，并问要不要代为重构：
 
 > - 「帮我体检 `~/.claude/skills/xxx` 这个 skill」
 > - 「我的 SKILL.md 规范吗 / 是不是太长了 / 要不要拆 references」
 > - 「audit this skill」「lint SKILL.md」
 
-**（可选）直接跑机检脚本** —— 进 CI 或想自己单独看机检结果时：
+### 命令行直接跑（零依赖，仅需 Python 3）
 
 ```bash
-python3 check.py <skill目录>          # 文本报告
-python3 check.py <skill目录> --json   # JSON（退出码：有 FAIL → 1，否则 0）
+python3 check.py <skill目录>          # 输出彩色报告
+python3 check.py <skill目录> --json   # 机器可读 JSON（CI 可用）
 ```
 
-零依赖，仅用 Python3 标准库。
+退出码：有 FAIL → 1，否则 0（可用于 CI 卡关）。
+
+### Docker（不想装 Python 也能跑）
+
+```bash
+# 拉官方镜像直接用（打 v* tag 时 GitHub Actions 自动发布到 GHCR）
+docker run --rm -v "$PWD:/work" ghcr.io/huiyonghkw/hekouwang-claude-skill-doctor-skill
+
+# 或本地自建
+docker build -t claude-skill-doctor .
+docker run --rm -v "$PWD:/work" claude-skill-doctor            # 体检挂载的 skill
+docker run --rm -v "$PWD:/work" claude-skill-doctor /work --json
+```
+
+### 接进 CI 卡关（GitHub Actions 示例）
+
+```yaml
+- uses: actions/setup-python@v5
+  with: { python-version: "3.x" }
+- name: SKILL.md 体检（不合格则拦 PR）
+  run: |
+    curl -sO https://raw.githubusercontent.com/huiyonghkw/hekouwang-claude-skill-doctor-skill/main/check.py
+    python3 check.py path/to/your/skill
+```
+
+本仓库自身的 CI 见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)（语法 + good/bad 夹具 + JSON 合法性）。
 
 ## 检查项（12 项加权）
 
