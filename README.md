@@ -16,15 +16,20 @@
 
 ## 用法
 
-```bash
-# 体检一个 skill（目录里要有 SKILL.md）
-python3 check.py ~/.claude/skills/my-skill
+这是一个 **Claude Code Skill——用自然语言喊它就行**，Claude 会自动加载本 skill、在底层跑机检、再做定性复核，最后给你评分卡 + 修复建议，并问要不要代为重构：
 
-# 机器可读 JSON（进 CI）
-python3 check.py ~/.claude/skills/my-skill --json
+> - 「帮我体检 `~/.claude/skills/xxx` 这个 skill」
+> - 「我的 SKILL.md 规范吗 / 是不是太长了 / 要不要拆 references」
+> - 「audit this skill」「lint SKILL.md」
+
+**（可选）直接跑机检脚本** —— 进 CI 或想自己单独看机检结果时：
+
+```bash
+python3 check.py <skill目录>          # 文本报告
+python3 check.py <skill目录> --json   # JSON（退出码：有 FAIL → 1，否则 0）
 ```
 
-退出码：有 FAIL → 1，否则 0。零依赖，仅用 Python3 标准库。
+零依赖，仅用 Python3 标准库。
 
 ## 检查项（12 项加权）
 
