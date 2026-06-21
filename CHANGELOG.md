@@ -2,6 +2,17 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.1] - 2026-06-21
+
+实战体检 14 个 skill 时暴露的两个机检缺陷修复（dogfooding）：
+
+### Fixed
+- **glob 指针不再误报死链**：`reference/deck-engine-*.html` 这类通配符指针，
+  现在用 `glob` 解析、能匹配到真实文件就算存在；`{a,b}` brace 简写跳过不误报。
+  （原正则在 `*` 处截断成 `reference/deck-engine-`，当字面路径判死。）
+- **指针 / 教学词行号还原为文件绝对行号**：原先报的是正文相对行号（少算了
+  frontmatter 行数），定位会偏。`parse_frontmatter` 现返回 `body_offset` 补正。
+
 ## [1.0.0] - 2026-06-21
 
 首个版本。给 Agent Skill（SKILL.md）做体检的零依赖检查器。

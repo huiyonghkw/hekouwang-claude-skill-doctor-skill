@@ -27,6 +27,7 @@ import os
 import re
 import sys
 import json
+import glob as _glob
 import argparse
 
 # ---------- 终端着色 ----------
@@ -117,10 +118,11 @@ def find_skill_md(root):
 
 
 def parse_frontmatter(text):
-    """极简 frontmatter 解析（零依赖）。返回 (dict, raw_fm_text, body_text)。
+    """极简 frontmatter 解析（零依赖）。返回 (dict, raw_fm_text, body_text, body_offset)。
+    body_offset = 正文前的行数（frontmatter 占了多少行），用于把正文相对行号还原成文件绝对行号。
     支持: `key: value`、块标量 `key: |`/`key: >`、行内 list `[a, b]`、缩进 list `- x`。"""
     if not text.startswith("---"):
-        return {}, "", text
+        return {}, "", text, 0
     lines = text.splitlines()
     # 找到第二个 '---'
     end = None
@@ -129,7 +131,7 @@ def parse_frontmatter(text):
             end = i
             break
     if end is None:
-        return {}, "", text
+        return {}, "", text, 0
     fm_lines = lines[1:end]
     body = "\n".join(lines[end + 1:])
     data = {}
@@ -169,11 +171,11 @@ def parse_frontmatter(text):
             continue
         data[key] = val.strip().strip("'\"")                   # 普通标量
         i += 1
-    return data, "\n".join(fm_lines), body
+    return data, "\n".join(fm_lines), body, end + 1
 
 
-def analyze_body(body):
-    """逐行分析正文，返回结构信息。"""
+def analyze_body(body, line_offset=0):
+    """逐行分析正文，返回结构信息。line_offset：正文前的行数，用于把行号还原成文件绝对行号。"""
     lines = body.splitlines()
     info = {
         "lines": len(lines),
@@ -187,7 +189,8 @@ def analyze_body(body):
     in_code = False
     cur = 0
     # 引用到的捆绑资源（相对路径）：references/ scripts/ assets/ reference/ examples/
-    ptr_re = re.compile(r"(?<![\w./])((?:references?|scripts?|assets?|examples?|templates?)/[\w\-./]+)")
+    # 字符类含通配符 *?{}，让 deck-engine-*.html 这类 glob 被整体捕获（死链检查里再 glob 解析）。
+    ptr_re = re.compile(r"(?<![\w./])((?:references?|scripts?|assets?|examples?|templates?)/[\w\-./*?{}]+)")
     for i, ln in enumerate(lines):
         st = ln.strip()
         if st.startswith("```"):
@@ -205,7 +208,7 @@ def analyze_body(body):
         if st.startswith("#"):
             info["headings"].append(st.lstrip("#").strip())
         for m in ptr_re.finditer(ln):
-            info["ref_pointers"].append((m.group(1).rstrip(".`"), i + 1))
+            info["ref_pointers"].append((m.group(1).rstrip(".`"), i + 1 + line_offset))
     return info
 
 
@@ -293,8 +296,8 @@ def check(root):
 
     with open(md_path, encoding="utf-8", errors="replace") as f:
         text = f.read()
-    fm, _fm_raw, body = parse_frontmatter(text)
-    info = analyze_body(body)
+    fm, _fm_raw, body, body_offset = parse_frontmatter(text)
+    info = analyze_body(body, body_offset)
     allfiles = list_skill_files(root)
     refs = reference_files(allfiles)
 
@@ -390,9 +393,22 @@ def check(root):
             "把正文里仍然厚重的章节继续迁到 references/，正文回归「路由 + 硬规矩」。")
 
     # ---------- #4b 指针无死链 ----------
+    GLOB_CHARS = set("*?[]{}")
     dead = []
     for path, ln_no in info["ref_pointers"]:
-        if not os.path.exists(os.path.join(root, path)):
+        full = os.path.join(root, path)
+        if GLOB_CHARS & set(path):
+            # 通配/模板指针（如 deck-engine-*.html）：用 glob 解析，能匹配到就算存在；
+            # brace 扩展 {a,b} glob 不支持，跳过不误报（典型是"两套模板"的简写）。
+            try:
+                if _glob.glob(full):
+                    continue
+            except Exception:
+                pass
+            if "{" in path or "}" in path:
+                continue
+            dead.append((path, ln_no))
+        elif not os.path.exists(full):
             dead.append((path, ln_no))
     uniq_ptr = {p for p, _ in info["ref_pointers"]}
     if not info["ref_pointers"]:
@@ -448,7 +464,7 @@ def check(root):
     teach_hits = []
     for w in TEACHING:
         for m in re.finditer(re.escape(w), body, re.I):
-            teach_hits.append((w, body[:m.start()].count("\n") + 1))
+            teach_hits.append((w, body[:m.start()].count("\n") + 1 + body_offset))
     if not teach_hits:
         add("noteach", "别替模型补它已经会的（无教学冗余）", "PASS",
             "未检出「教通用写法/语言入门」类措辞。")
