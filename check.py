@@ -451,8 +451,15 @@ def check(root):
             "换成 `~` / `$HOME` / 相对路径 / 「此 skill 目录」占位——别人装上后这些路径会失效。")
 
     # ---------- #7 allowed-tools 最小化（加内容项，低权重）----------
-    tools = fm.get("allowed-tools")
-    if isinstance(tools, list) and tools:
+    # 两种合法写法都认：YAML 列表（- a / [a,b]）与官方 frontmatter 的逗号字符串（allowed-tools: Bash, Read）。
+    raw_tools = fm.get("allowed-tools")
+    if isinstance(raw_tools, list):
+        tools = [str(t).strip() for t in raw_tools if str(t).strip()]
+    elif isinstance(raw_tools, str):
+        tools = [t.strip() for t in raw_tools.split(",") if t.strip()]
+    else:
+        tools = []
+    if tools:
         add("tools", "声明 allowed-tools（最小权限）", "PASS",
             f"已收敛工具集：{', '.join(tools[:8])}。")
     else:

@@ -2,6 +2,15 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.2] - 2026-06-22
+
+实战体检三个品牌 skill 时暴露的机检缺陷修复（dogfooding）：
+
+### Fixed
+- **#7 allowed-tools 兼容逗号字符串**：原先只认 YAML 列表（`- a` / `[a,b]`），
+  把官方 frontmatter 标准的逗号字符串写法（`allowed-tools: Bash, Read, Write`）
+  误判为「未声明」。现在两种写法都解析、非空即 PASS。
+
 ## [1.0.1] - 2026-06-21
 
 实战体检 14 个 skill 时暴露的两个机检缺陷修复（dogfooding）：
