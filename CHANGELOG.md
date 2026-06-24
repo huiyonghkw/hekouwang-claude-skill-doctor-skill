@@ -2,6 +2,27 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.0] - 2026-06-24
+
+接入外部安全扫描、消化业界 skill 写作最佳实践，扩展体检维度。
+
+### Added
+- **工作流新增步骤 2b · 深度安全扫描（可选）**：叠加 [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector)，
+  覆盖提示注入 / 数据外泄 / 隐藏指令 / 供应链 / 过度授权 / MCP 越权等 68 类模式，
+  补 `check.py` #0 密钥正则之外的深度安全维。含实战铁律：**只扫逻辑文件、别扫 assets**
+  （直接扫会把字体/图片二进制当代码，刷出几十条假 `TM1 Tool Parameter Abuse`）；
+  低可信度（<30%）`Hidden Instructions` 多是中文/零宽字符误报，人工复核。
+- **评分维度 #8 触发方式匹配（model vs user invoked）**：只靠人手敲名字触发的 skill
+  应设 `disable-model-invocation: true`，省掉每轮 `description` 的 context load。
+- **`references/skill-writing-vocab.md`**：消化 mattpocock/skills 的 *writing-great-skills*，
+  把"好 skill"的判据沉淀成可命名的诊断词汇——两种载荷（context/cognitive load）、
+  信息阶梯、branch 拆分测试、完成判据（防 premature completion）、no-op 测试、
+  sediment/sprawl/duplication 失败模式、leading word。出报告时用这些词点破问题。
+
+### Changed
+- **#10a 锐化为 no-op 测试**：判据明确为「这段相对模型默认行为改变了什么？没有就删」，
+  比原先"别替模型补它已经会的"更可操作。
+
 ## [1.0.2] - 2026-06-22
 
 实战体检三个品牌 skill 时暴露的机检缺陷修复（dogfooding）：

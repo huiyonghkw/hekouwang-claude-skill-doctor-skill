@@ -58,6 +58,13 @@ Skill 的命脉是两条，权重最高：
    python3 <此skill目录>/check.py <skill目录>
    ```
    - 需要结构化结果时加 `--json`。退出码：有 FAIL → 1，否则 0。
+2b. **深度安全扫描（可选 · 外部工具 SkillSpector）**：`check.py` 的 #0 只做密钥正则；当要查**提示注入 / 数据外泄 / 隐藏指令 / 供应链 / 过度授权 / MCP 越权**等 68 类模式（尤其体检"别人写的、要装进来的" skill）时，叠加跑 [SkillSpector](https://github.com/NVIDIA/skillspector)（本机已装：`uv tool install`，需 Python 3.12/3.13）：
+   ```bash
+   skillspector scan <skill目录> --no-llm --format markdown -o report.md
+   ```
+   - **铁律：只扫逻辑文件，别扫 assets。** 直接扫会把字体 `.woff2`、PNG 等**二进制当代码**，在字节流里刷出几十条假 `TM1 Tool Parameter Abuse`。先用 rsync 把文本拷成纯逻辑副本再扫（只留 `.md/.py/.js/.json/.html/.css/.sh/.txt/.yaml`），content-factory 这样从 80M→248K、噪声清零。
+   - **低可信度看人**：<30% 的 `Hidden Instructions` 多是中文/零宽字符误报，人工瞄一眼即可，别当真漏洞；反复出现的同类噪声用 `skillspector baseline` 生成基线压制。
+   - `--no-llm` 纯静态、免 key；要更准的行为分析再配 LLM provider（`SKILLSPECTOR_PROVIDER` + 对应 key）。结论并进体检报告的安全维，不替代 #0。
 3. **定性复核**（机检之上，必须做）：机检是启发式，几项要你**真正读 SKILL.md**再下结论（见下「机检的盲区」）：
    - 通读 `description`，**真的当一次模型**：光看这段，能不能判断"什么请求该唤醒它"？
    - 通读正文：哪些是"模型不可能知道的项目/品牌私有事实"（该留），哪些是"通用写法/框架教程"（该删或下沉）？
@@ -83,7 +90,8 @@ Skill 的命脉是两条，权重最高：
 | 5 | **脚本外置 scripts/** | 确定性代码（构建/截图/合成/转换）是 scripts/ 真文件 | 大段可执行代码内联在正文，每次靠模型重打 |
 | 6 | **可移植（无硬编码绝对路径）** | 用 `~`/`$HOME`/相对路径/占位 | 出现 `/Users/某人/`、`/home/某人/`——别人装上即失效 |
 | 7 | **allowed-tools 最小化** | 声明本 skill 真正需要的工具 | 不声明（继承全部工具，越权面大）——可选项，低权重 |
-| 10a | **别替模型补它已经会的** | 只装项目/品牌私有事实 | 有"语言入门/框架教程/如何使用"这类随模型升级很快过时的教学段 |
+| 8 | **触发方式匹配（model vs user invoked）** | 只靠人手敲名字触发的 skill 设 `disable-model-invocation: true`（零 context load） | 明明只手动触发，却留着 description 当 model-invoked，每轮白占上下文（详见 references/skill-writing-vocab.md §二）——定性项 |
+| 10a | **别替模型补它已经会的（no-op 测试）** | 只装项目/品牌私有事实 | 有"语言入门/框架教程/如何使用"这类教学段——判据：**这段相对模型默认行为改变了什么？没有就删**（即 no-op；详见 vocab §六） |
 | 10b | **配套文档（README+CHANGELOG）** | 对外分发友好 | 缺失——纯自用可忽略，低权重 |
 
 **分档**：A 优秀 ≥85 · B 良好 ≥70 · C 及格 ≥50 · D 建议重构 <50。
@@ -100,6 +108,8 @@ Skill 的命脉是两条，权重最高：
 - **#5 脚本外置**：脚本按代码行数/围栏数猜。一段 5 行的示范片段该留正文；一个 80 行的构建/合成脚本该外置。读代码块的"性质"定夺。
 - **#10a 别替模型补它已经会的**：脚本按"教程/如何使用/语言入门"措辞猜，**会误伤**——比如正文在写"本项目**自研**流程的用法"（模型确实不知道，该留），或在"反对写教程"。判据是"这段知识模型升级后会不会自动变强"：会→删；不会（项目私有）→留。
 - **本 skill 自检会触发 #10a 误报**：因为正文里就列着"教程/如何使用"这些**待检测的黑名单词**——这是元层面的正常现象，定性时直接放行。
+
+> **定性诊断词汇**：做 #2/#3/#4/#8/#10a 这些"机器判不准"的项时，读 [`references/skill-writing-vocab.md`](references/skill-writing-vocab.md)——它把"好 skill"的判据沉淀成可命名的语言（两种载荷、信息阶梯、branch 拆分测试、完成判据防提前收工、no-op 测试、sediment/sprawl/duplication 失败模式、leading word）。出报告时用这些词点破问题，比泛说"太长/有冗余"更准。根判据：**skill 是为榨出确定性而存在，根本美德是「每次走同一套过程」可预测。**
 
 ---
 
