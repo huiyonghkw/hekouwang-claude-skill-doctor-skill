@@ -5,14 +5,15 @@
 ## [1.3.0] - 2026-07-15
 
 **版本号说明**：本次内容即原定的 1.2.0（见下方 Changed/Added），因发布事故改号为 1.3.0——
-ClawHub 上 `hekouwang-claude-skill-doctor-skill` 这个 slug 的 1.2.2 曾被误发成 **md-doctor 的内容**
-（check.py 与 md-doctor 逐字节相同、测试夹具是 `CLAUDE.md` 而非 `SKILL.md`），
-真正的 skill-doctor 从未上架。需发一个高于 1.2.2 的版本才能把 latest 拨正，故跳到 1.3.0。
-误发的 1.2.2 已从该 slug 永久删除。
+ClawHub 上 `hekouwang-claude-skill-doctor-skill` 这个 slug 于 2026-07-09 被误发成 **md-doctor 的内容**
+并占用了 1.2.2 这个版本号（check.py 与 md-doctor 逐字节同 hash `5f0d3613`、测试夹具是 `CLAUDE.md`
+而非 `SKILL.md`）。该 slug 在 2026-06-24 的 1.0.2 / 1.0.3 是正确的 skill-doctor 内容，
+即**误发覆盖了正确版本**。需发一个高于 1.2.2 的版本才能把 latest 拨正，故跳到 1.3.0。
+误发的 1.2.2 已从该 slug 永久删除，版本史现为 1.0.2 → 1.0.3 → 1.3.0。
 
 ### Fixed
 - **ClawHub 发布事故更正**：`hekouwang-claude-skill-doctor-skill@1.2.2` 实为 md-doctor，已删除；
-  本版是首个真正上架 ClawHub 的 Agent Skill 体检器。
+  latest 拨回真正的 Agent Skill 体检器。
 - **发布纪律**：以后 `clawhub skill publish` **一律显式传 `--version`**——
   ClawHub 不读 SKILL.md 的 `version`，只在线上版本上 +1（实测会把本地 1.2.2 发成 1.1.3、
   本地 1.1.0 发成 0.1.2，即**降级**）。自动推断不可信。
