@@ -1,5 +1,10 @@
 ---
 name: hekouwang-claude-skill-doctor-skill
+slug: hekouwang-claude-skill-doctor-skill
+displayName: Claude Skill 体检器（SKILL.md Doctor）
+summary: Agent Skill（SKILL.md）体检器：评 description 触发质量 / 篇幅 / 渐进披露 / 脚本外置 / 可移植性 / 安全（无硬编码密钥），出评分卡 + 修复建议。零依赖，claude-md-doctor 的姊妹工具。
+license: MIT-0
+homepage: https://github.com/huiyonghkw/hekouwang-claude-skill-doctor-skill
 version: 1.3.0
 description: >
   会勇禾口王的AI笔记 · Agent Skill（SKILL.md）体检器。检查一个 Claude/Agent Skill 是否
