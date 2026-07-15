@@ -1,6 +1,6 @@
 ---
 name: hekouwang-claude-skill-doctor-skill
-version: 1.1.0
+version: 1.2.0
 description: >
   会勇禾口王的AI笔记 · Agent Skill（SKILL.md）体检器。检查一个 Claude/Agent Skill 是否
   符合"按需加载的指令包，不是单文件巨石"的最佳实践——评 description 触发质量、SKILL.md
@@ -59,12 +59,31 @@ Skill 的命脉是两条，权重最高：
    python3 <此skill目录>/check.py <skill目录>
    ```
    - 需要结构化结果时加 `--json`。退出码：有 FAIL → 1，否则 0。
-2b. **深度安全扫描（可选 · 外部工具 SkillSpector）**：`check.py` 的 #0 只做密钥正则；当要查**提示注入 / 数据外泄 / 隐藏指令 / 供应链 / 过度授权 / MCP 越权**等 68 类模式（尤其体检"别人写的、要装进来的" skill）时，叠加跑 [SkillSpector](https://github.com/NVIDIA/skillspector)（本机已装：`uv tool install`，需 Python 3.12/3.13）：
+2b. **深度安全扫描（可选 · 外部工具 SkillSpector）**：`check.py` 的 #0 只做密钥正则；当要查**提示注入 / 数据外泄 / 隐藏指令 / 供应链 / 过度授权 / MCP 越权**等 68 类模式时，叠加跑 [SkillSpector](https://github.com/NVIDIA/skillspector)（本机已装：`uv tool install`，需 Python 3.12/3.13）：
    ```bash
-   skillspector scan <skill目录> --no-llm --format markdown -o report.md
+   env -u ALL_PROXY -u all_proxy -u HTTPS_PROXY -u https_proxy \
+     skillspector scan <纯逻辑副本> --no-llm --format markdown -o report.md
    ```
-   - **铁律：只扫逻辑文件，别扫 assets。** 直接扫会把字体 `.woff2`、PNG 等**二进制当代码**，在字节流里刷出几十条假 `TM1 Tool Parameter Abuse`。先用 rsync 把文本拷成纯逻辑副本再扫（只留 `.md/.py/.js/.json/.html/.css/.sh/.txt/.yaml`），content-factory 这样从 80M→248K、噪声清零。
-   - **低可信度看人**：<30% 的 `Hidden Instructions` 多是中文/零宽字符误报，人工瞄一眼即可，别当真漏洞；反复出现的同类噪声用 `skillspector baseline` 生成基线压制。
+   - **只对"别人写的、要装进来的" skill 跑。** 自研 skill 扫出来的实测是 100% 误报（2026-07-15 全量验证 7 个 hekouwang-* skill，逐条翻源码，无一为真），跑了只会浪费时间。
+   - **自研 skill 只做回归检测。** content-factory / yandu-deck / stock-data-reader 三个（会持续改的）已各存一份归零基线在自己目录的 `.skillspector-baseline.yaml`，改完代码后：
+     ```bash
+     skillspector scan <纯逻辑副本> --no-llm --baseline <skill目录>/.skillspector-baseline.yaml
+     ```
+     **冒出来的任何一条都是新的**，值得真翻一眼源码；`--show-suppressed` 看压了什么。基线里的 13/8/4 条已核实为误报（2026-07-15 A/B 验证：yandu-deck `100 CRITICAL DO_NOT_INSTALL` → `0 LOW SAFE`）。改动大到路径/内容 hash 全变时重新 `skillspector baseline <副本> -o …` 存一版。
+   - **分数不是门禁，只看条目。** `Score/Severity` 是**逐条累加**出来的：yandu-deck/iterm2/cc-prod 三个都判 `100/100 CRITICAL · DO NOT INSTALL`，但报告里**一条 CRITICAL 发现都没有**——纯粹是十几条 MEDIUM/HIGH 累加撞顶。且评分随版本通胀：content-factory 代码一行没改，v2.3.5 是 `19/100 SAFE`，v2.3.13 变 `40/100 CAUTION`。**永远读条目、翻源码，别信总评。**
+   - **铁律：只扫逻辑文件，别扫 assets。** 直接扫会把字体 `.woff2`、PNG 等**二进制当代码**，在字节流里刷出几十条假 `TM1 Tool Parameter Abuse`。先用 rsync 拷纯逻辑副本（只留 `.md/.py/.js/.json/.html/.css/.sh/.txt/.yaml`）。⚠️ **`--exclude` 必须写在 `--include='*/'` 前面**（rsync 首次匹配生效，否则 `*/` 先吃掉 `.venv/`，把整个 site-packages 当你的代码扫）：
+     ```bash
+     rsync -a --prune-empty-dirs \
+       --exclude='.venv/' --exclude='node_modules/' --exclude='.git/' --exclude='__pycache__/' \
+       --include='*/' --include='*.md' --include='*.py' --include='*.js' --include='*.json' \
+       --include='*.html' --include='*.css' --include='*.sh' --include='*.txt' --include='*.yaml' \
+       --exclude='*' <skill目录>/ <副本>/
+     ```
+     实测 content-factory 141M→1.1M、stock-data-reader 264M→176K。
+   - **已知高置信度误报样本**（别被 90%+ 唬住，这些全部核实为假）：`rm -f "$写死的路径"` → `TM1 Tool Parameter Abuse` 95%；`subprocess.run([...], check=True)` 硬编码列表 → `OH1 Unvalidated Output Injection` 95% + `AST4`（它建议的 remediation 恰恰就是这个写法）；docstring 里写"本脚本**绝不读取** .env/*.key" → `PE3 Credential Access`；字体文件名列表 → `MP2 Context Window Stuffing`；中文 frontmatter → `P2 Hidden Instructions`（置信度 21%，全在 `:1`）；中文触发词 → `AS3 Mixed script`。
+   - **`--baseline` 的 glob `rules` 别乱开。** `rules: {id: "TM1"}` 能跨 skill 全局压制，但**扫外来 skill 时恰恰不能用**——今天 TM1 在自研 `rm` 上是误报，在恶意 skill 里可能是真的，全局关掉等于拆探头。跨 skill 只压 `path`+`message` 都限定死的具体条目。
+   - **代理会让扫描直接崩**：SOCKS 代理下报 `Using SOCKS proxy, but the 'socksio' package is not installed`（同 `词级字幕.py` 那个坑），用上面的 `env -u` 绕开。OSV.dev 连不上只是降级到静态库，不影响结论。
+   - 唯一值得看的结构性信号是 **LP1「代码有 network/env/shell 能力但没声明权限」**（7 个自研 skill 中 5 个命中）——不是漏洞，是提醒你 frontmatter 可以补 `allowed-tools`。
    - `--no-llm` 纯静态、免 key；要更准的行为分析再配 LLM provider（`SKILLSPECTOR_PROVIDER` + 对应 key）。结论并进体检报告的安全维，不替代 #0。
 3. **定性复核**（机检之上，必须做）：机检是启发式，几项要你**真正读 SKILL.md**再下结论（见下「机检的盲区」）：
    - 通读 `description`，**真的当一次模型**：光看这段，能不能判断"什么请求该唤醒它"？

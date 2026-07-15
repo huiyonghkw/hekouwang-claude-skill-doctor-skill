@@ -2,6 +2,39 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.0] - 2026-07-15
+
+拿真数据校准步骤 2b 的 SkillSpector。全量扫 7 个 `hekouwang-*` skill、逐条翻源码核实，
+结论推翻 1.1.0 的乐观假设：**对自研 skill 它 100% 误报**，且**分数完全不可信**。
+2b 从"可选加跑的安全维"收紧为"只对外来 skill 跑的入库审查"。
+
+### Changed
+- **2b 定位收紧：只对"别人写的、要装进来的" skill 跑。** 7 个自研 skill 全扫、逐条翻源码，
+  无一为真。自研 skill 改走**回归检测**（存基线 → 只看 NEW），不再全量看告警。
+- **新增铁律「分数不是门禁，只看条目 + 翻源码」。** `Score/Severity` 是逐条**累加**的：
+  yandu-deck / iterm2 / cc-prod 三个判 `100/100 CRITICAL · DO NOT INSTALL`，
+  但报告里**一条 CRITICAL 发现都没有**——纯粹是十几条 MEDIUM/HIGH 累加撞顶。
+  且评分随版本通胀：content-factory 代码一行没改，v2.3.5 `19/100 SAFE` → v2.3.13 `40/100 CAUTION`。
+- **推翻 1.1.0 的「低可信度才是误报」说法**：95% 高可信度的照样是误报。改为附**高置信度误报样本表**：
+  `rm -f "$写死路径"` → `TM1` 95%；`subprocess.run([...], check=True)` 硬编码列表 →
+  `OH1 Unvalidated Output Injection` 95% + `AST4`（其 remediation 建议的恰恰就是这个写法）；
+  docstring 写"本脚本**绝不读取** .env/*.key" → `PE3 Credential Access`；
+  字体文件名列表 → `MP2 Context Window Stuffing`；中文 frontmatter → `P2 Hidden Instructions` 21%；
+  中文触发词 → `AS3 Mixed script`。
+
+### Added
+- **rsync `--exclude` 顺序坑**：必须排在 `--include='*/'` 前面（rsync 首次匹配生效，
+  否则 `*/` 先吃掉 `.venv/`，整个 site-packages 被当自己的代码扫）。实测 stock-data-reader 264M→176K。
+- **SOCKS 代理绕法**：代理下扫描直接崩（`'socksio' package is not installed`），
+  需 `env -u ALL_PROXY -u all_proxy -u HTTPS_PROXY -u https_proxy`。OSV.dev 连不上只降级静态库，不影响结论。
+- **`--baseline` 正确用法 + 反例**：`fingerprints` 按「路径+内容 hash」锁定、只对同一 skill 生效；
+  能跨 skill 的 glob `rules`（如 `id: "TM1"`）**恰恰不能在扫外来 skill 时开**——
+  同一规则在自研 `rm` 上是误报、在恶意 skill 里可能是真的，全局关掉等于拆探头。
+- content-factory / yandu-deck / stock-data-reader 三个常改的 skill 各存一份归零基线
+  （`.skillspector-baseline.yaml`，A/B 验证：yandu-deck `100 CRITICAL DO_NOT_INSTALL` → `0 LOW SAFE`）。
+- 记录唯一有信号的结构性告警 **LP1「代码有 network/env/shell 能力但没声明权限」**（7 个中 5 个命中）——
+  不是漏洞，与 `check.py` 自检的「未声明 allowed-tools」指向同一缺口。
+
 ## [1.1.0] - 2026-06-24
 
 接入外部安全扫描、消化业界 skill 写作最佳实践，扩展体检维度。
