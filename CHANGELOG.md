@@ -2,7 +2,20 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [1.2.0] - 2026-07-15
+## [1.3.0] - 2026-07-15
+
+**版本号说明**：本次内容即原定的 1.2.0（见下方 Changed/Added），因发布事故改号为 1.3.0——
+ClawHub 上 `hekouwang-claude-skill-doctor-skill` 这个 slug 的 1.2.2 曾被误发成 **md-doctor 的内容**
+（check.py 与 md-doctor 逐字节相同、测试夹具是 `CLAUDE.md` 而非 `SKILL.md`），
+真正的 skill-doctor 从未上架。需发一个高于 1.2.2 的版本才能把 latest 拨正，故跳到 1.3.0。
+误发的 1.2.2 已从该 slug 永久删除。
+
+### Fixed
+- **ClawHub 发布事故更正**：`hekouwang-claude-skill-doctor-skill@1.2.2` 实为 md-doctor，已删除；
+  本版是首个真正上架 ClawHub 的 Agent Skill 体检器。
+- **发布纪律**：以后 `clawhub skill publish` **一律显式传 `--version`**——
+  ClawHub 不读 SKILL.md 的 `version`，只在线上版本上 +1（实测会把本地 1.2.2 发成 1.1.3、
+  本地 1.1.0 发成 0.1.2，即**降级**）。自动推断不可信。
 
 拿真数据校准步骤 2b 的 SkillSpector。全量扫 7 个 `hekouwang-*` skill、逐条翻源码核实，
 结论推翻 1.1.0 的乐观假设：**对自研 skill 它 100% 误报**，且**分数完全不可信**。

@@ -1,6 +1,6 @@
 ---
 name: hekouwang-claude-skill-doctor-skill
-version: 1.2.0
+version: 1.3.0
 description: >
   会勇禾口王的AI笔记 · Agent Skill（SKILL.md）体检器。检查一个 Claude/Agent Skill 是否
   符合"按需加载的指令包，不是单文件巨石"的最佳实践——评 description 触发质量、SKILL.md
