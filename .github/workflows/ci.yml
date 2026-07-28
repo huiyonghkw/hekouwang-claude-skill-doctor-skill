@@ -18,6 +18,11 @@ jobs:
       - name: Syntax check (zero deps)
         run: python -m py_compile check.py
 
+      # trigger_eval.py 要 claude CLI 才能真跑，CI 里只能验语法。
+      # 但必须验 —— 否则它进了仓库却没人看着，改坏了要等用户踩到才知道。
+      - name: Optional engine syntax check
+        run: python -m py_compile scripts/trigger_eval.py
+
       - name: Good fixture should pass (exit 0)
         run: python3 check.py tests/fixtures/good
 
