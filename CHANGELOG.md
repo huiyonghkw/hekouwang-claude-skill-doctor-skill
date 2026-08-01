@@ -2,6 +2,24 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.1] - 2026-08-01
+
+修 #0 安全红线的两处假阳性。**假阳性会让红线失去意义**——被误报训练过的人下次看到真 FAIL 也只会挥手放过。
+
+### Fixed
+- **`sk-` 密钥正则缺左词界**：`sk-(?:ant-)?[\w-]{20,}` 会从 `generate-ask-user-format.ts`
+  里抠出 `sk-user-format` 判成 key。同一份 `SECRET_PATTERNS` 里 `AKIA` / `AIza` / `JWT`
+  三条都带 `\b`，只有这条漏了。实测某第三方 skill 因此被判资损级 FAIL（62 分），
+  命中源全是 `ask-user-*` 文件名。
+- **测试夹具里的假密钥降级 WARN**：安全基准/回归夹具（`test/ tests/ fixtures/ golden/ snapshots/`
+  等目录）里的 key 是刻意载荷，不是泄露。现在只在夹具命中时判 WARN 并提示"翻一眼确认"，
+  正文/脚本命中照旧 FAIL；两类同时命中时 FAIL 优先，detail 里标明夹具那几处已降级。
+
+### 验证（A/B 基准分辨力自检）
+三类样本必须判出三种结果，否则说明改完的判据分不开对和错：
+真密钥 `sk-proj-…` → **FAIL**；夹具里 `sk-ant-api03-…` → **WARN**；`ask-user-question-format` → **PASS**。
+回归夹具分数不变（`tests/fixtures/bad` 67、`good` 100）。
+
 ## [1.4.0] - 2026-07-28
 
 补上本器最大的盲区：**#2 触发质量以前只能拍脑袋，现在能实测**。

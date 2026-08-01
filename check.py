@@ -87,7 +87,8 @@ ABS_PATH_RE = re.compile(r"(?<![\w~])(/Users/[^/\s'\"`)]+|/home/[^/\s'\"`)]+|[A-
 # ---------- 密钥指纹（正文里出现 = 资损级，直接 FAIL）----------
 SECRET_PATTERNS = [
     ("私钥块",        re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----")),
-    ("OpenAI/Anthropic key", re.compile(r"sk-(?:ant-)?[A-Za-z0-9_\-]{20,}")),
+    # \b 不可省：没有左词界时 `generate-ask-user-format` 里的 `ask-user-format` 会被当成 sk- 密钥
+    ("OpenAI/Anthropic key", re.compile(r"\bsk-(?:ant-)?[A-Za-z0-9_\-]{20,}")),
     ("AWS Access Key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
     ("GitHub token",   re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{60,}")),
@@ -97,6 +98,10 @@ SECRET_PATTERNS = [
         r"(?i)\b(?:password|passwd|pwd|secret|api[_\-]?key|access[_\-]?key|auth[_\-]?token|client[_\-]?secret)\b"
         r"\s*[:=]\s*['\"]([^'\"\s]{6,})['\"]")),
 ]
+# 测试夹具目录：安全基准/回归夹具里的假密钥是刻意载荷，判 FAIL 会让红线失去意义（降级为 WARN）
+FIXTURE_DIRS = {"test", "tests", "__tests__", "spec", "specs",
+                "fixture", "fixtures", "snapshot", "snapshots", "golden"}
+
 PLACEHOLDER_RE = re.compile(
     r"(?i)(x{3,}|y{3,}|your[_\-]?|<[^>]*>|\$\{|\benv\b|process\.env|os\.environ|"
     r"example|changeme|placeholder|redacted|todo|n/a|\.\.\.|…|abc123|123456|test|dummy|sample)")
@@ -242,6 +247,11 @@ def reference_files(allfiles):
 
 # ====================== 检查 ======================
 
+def in_test_fixture(rel):
+    parts = rel.replace("\\", "/").lower().split("/")
+    return any(p in FIXTURE_DIRS for p in parts[:-1])
+
+
 def scan_secret_and_paths(root, allfiles):
     """对 SKILL.md + 所有 .md/.py/.sh/.js 做密钥与硬编码绝对路径扫描。"""
     secret_hits, path_hits = [], []
@@ -304,15 +314,23 @@ def check(root):
     secret_hits, path_hits = scan_secret_and_paths(root, allfiles)
 
     # ---------- #0 安全红线：硬编码密钥 ----------
-    if not secret_hits:
-        add("secret", "无硬编码密钥（安全红线）", "PASS",
-            "SKILL.md 及捆绑文件未检出 key / token / 私钥 / 口令赋值。")
-    else:
-        sample = "; ".join(f"{r}:L{n} {lab}={v}" for r, n, lab, v in secret_hits[:6])
+    live_hits = [h for h in secret_hits if not in_test_fixture(h[0])]
+    fixture_hits = [h for h in secret_hits if in_test_fixture(h[0])]
+    if live_hits:
+        sample = "; ".join(f"{r}:L{n} {lab}={v}" for r, n, lab, v in live_hits[:6])
+        tail = f"（另有 {len(fixture_hits)} 处在测试夹具里，已降级）" if fixture_hits else ""
         add("secret", "无硬编码密钥（安全红线）", "FAIL",
-            f"检出 {len(secret_hits)} 处疑似密钥：{sample}",
+            f"检出 {len(live_hits)} 处疑似密钥：{sample}{tail}",
             "立刻移出——skill 经常被打包分发/上传 GitHub，泄露面比私有代码更大。"
             "命中即视为已泄露，请轮换该凭据并检查 git 历史。")
+    elif fixture_hits:
+        sample = "; ".join(f"{r}:L{n} {lab}={v}" for r, n, lab, v in fixture_hits[:6])
+        add("secret", "无硬编码密钥（安全红线）", "WARN",
+            f"仅在测试夹具里检出 {len(fixture_hits)} 处疑似密钥：{sample}",
+            "夹具里的假密钥通常是刻意载荷，不判红线；仍请翻一眼确认不是把真凭据当样本粘进来了。")
+    else:
+        add("secret", "无硬编码密钥（安全红线）", "PASS",
+            "SKILL.md 及捆绑文件未检出 key / token / 私钥 / 口令赋值。")
 
     # ---------- #1 frontmatter 必填且格式合法 ----------
     name = fm.get("name", "")

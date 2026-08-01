@@ -5,7 +5,7 @@ displayName: Claude Skill 体检器（SKILL.md Doctor）
 summary: Agent Skill（SKILL.md）体检器：评 description 触发质量 / 篇幅 / 渐进披露 / 脚本外置 / 可移植性 / 安全（无硬编码密钥），出评分卡 + 修复建议。零依赖，claude-md-doctor 的姊妹工具。
 license: MIT-0
 homepage: https://github.com/huiyonghkw/hekouwang-claude-skill-doctor-skill
-version: 1.4.0
+version: 1.4.1
 description: >
   会勇禾口王的AI笔记 · Agent Skill（SKILL.md）体检器。检查一个 Claude/Agent Skill 是否
   符合"按需加载的指令包，不是单文件巨石"的最佳实践——评 description 触发质量、SKILL.md
@@ -127,7 +127,7 @@ Skill 的命脉是两条，权重最高：
 
 | # | 检查项 | 合格长什么样 | 不合格信号 |
 |---|--------|------------|-----------|
-| 0 | **无硬编码密钥（安全红线）** | SKILL.md 及捆绑文件无 key/token/私钥/口令明文 | 出现 `sk-`/`AKIA`/私钥块/`password="..."` → **直接 FAIL**（skill 常被分发，泄露面更大） |
+| 0 | **无硬编码密钥（安全红线）** | SKILL.md 及捆绑文件无 key/token/私钥/口令明文 | 出现 `sk-`/`AKIA`/私钥块/`password="..."` → **直接 FAIL**（skill 常被分发，泄露面更大）<br>⚠️ 测试夹具目录（`test/ tests/ fixtures/ golden/ snapshots/`）里的命中判 **WARN 不判 FAIL**——安全基准的假密钥是刻意载荷，误报会把红线变成摆设 |
 | 1 | **frontmatter 必填合法** | 有 `name`（小写+连字符 ≤64）+ `description` | 缺 name/description → FAIL；name 含大写/下划线/空格 → WARN |
 | 2 | **description 含「何时用」** | 同时写清"做什么 + 何时/触发用"（这是被唤醒的唯一依据） | 只写"做什么"不写"何时用"；或太短没触发信号<br>⚠️ 机检只判"有没有信号词"，判不了准不准 —— 要判准不准走**触发力实测**（工作流 2c） |
 | 2b | **description ≤ 1024 字符** | 在上限内，触发稳定 | 超长，可能被截断 |
