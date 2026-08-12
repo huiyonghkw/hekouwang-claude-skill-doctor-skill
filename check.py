@@ -54,7 +54,8 @@ IMPORTANCE = {
     "frontmatter": 1.5, "trigger": 1.5, "length": 1.5,
     "disclosure": 1.5, "portable": 1.5, "noteach": 1.5,
     "pointers": 1.0, "scripts": 1.0, "desclen": 1.0,
-    "tools": 0.6, "companion": 0.6,                  # 加内容项：有更好，缺失不重罚
+    "pathscope": 1.0, "openclaw": 0.6,
+    "tools": 0.6, "companion": 0.6,
 }
 
 IGNORE_DIRS = {
@@ -81,8 +82,10 @@ TEACHING = [
 ]
 
 # ---------- 硬编码绝对路径（#6 可移植性：别人装了就废）----------
-# ~ / $HOME / ${HOME} 是可移植的，不算；/Users/某人、/home/某人、C:\Users\某人 才是踩坑。
-ABS_PATH_RE = re.compile(r"(?<![\w~])(/Users/[^/\s'\"`)]+|/home/[^/\s'\"`)]+|[A-Za-z]:\\\\?Users\\\\?[^\\\s'\"`)]+)")
+# ~ / $HOME / ${HOME} 是可移植的；家目录绝对路径才是踩坑。正则用拼接避免自检误报。
+_ABS_HOME = "/" + "Users" + r"/[^/\s'\"`)]+|" + "/home/" + r"[^/\s'\"`)]+|"
+_ABS_WIN = r"[A-Za-z]:\\Users\\[^\\\s'\"`)]+"
+ABS_PATH_RE = re.compile(r"(?<![\w~])(" + _ABS_HOME + _ABS_WIN + r")")
 
 # ---------- 密钥指纹（正文里出现 = 资损级，直接 FAIL）----------
 SECRET_PATTERNS = [
@@ -193,9 +196,11 @@ def analyze_body(body, line_offset=0):
     }
     in_code = False
     cur = 0
-    # 引用到的捆绑资源（相对路径）：references/ scripts/ assets/ reference/ examples/
-    # 字符类含通配符 *?{}，让 deck-engine-*.html 这类 glob 被整体捕获（死链检查里再 glob 解析）。
-    ptr_re = re.compile(r"(?<![\w./])((?:references?|scripts?|assets?|examples?|templates?)/[\w\-./*?{}]+)")
+    # 引用到的捆绑资源：须带文件扩展名，避免表格里的「references/scripts/assets」误匹配
+    ptr_re = re.compile(
+        r"(?<![\w./])((?:references?|scripts?|assets?|examples?|templates?)/"
+        r"[\w\-./*?{}]+\.(?:md|py|sh|js|json|html|yaml|yml|txt|css))"
+    )
     for i, ln in enumerate(lines):
         st = ln.strip()
         if st.startswith("```"):
@@ -277,8 +282,16 @@ def scan_secret_and_paths(root, allfiles):
                 ln_no = text[:m.start()].count("\n") + 1
                 secret_hits.append((rel, ln_no, label, _redact(val)))
         for m in ABS_PATH_RE.finditer(text):
+            frag = m.group(1)
+            if "某人" in frag or frag.endswith("..."):
+                continue
             ln_no = text[:m.start()].count("\n") + 1
-            path_hits.append((rel, ln_no, m.group(1)))
+            if in_test_fixture(rel):
+                continue
+            line = text.splitlines()[ln_no - 1] if ln_no <= len(text.splitlines()) else ""
+            if os.path.basename(p) == "check.py" and ("ABS_PATH" in line or "家目录" in line or "Users/..." in line):
+                continue
+            path_hits.append((rel, ln_no, frag))
     return secret_hits, path_hits
 
 
@@ -461,7 +474,7 @@ def check(root):
     # ---------- #6 可移植：无硬编码绝对路径 ----------
     if not path_hits:
         add("portable", "可移植（无硬编码绝对家目录路径）", "PASS",
-            "未检出 /Users/... 或 /home/... 这类换台机器就废的硬路径。")
+            "未检出硬编码家目录绝对路径。")
     else:
         show = "; ".join(f"{r}:L{n} {p}" for r, n, p in path_hits[:5]) + (" …" if len(path_hits) > 5 else "")
         add("portable", "可移植（无硬编码绝对家目录路径）", "WARN",
@@ -469,7 +482,6 @@ def check(root):
             "换成 `~` / `$HOME` / 相对路径 / 「此 skill 目录」占位——别人装上后这些路径会失效。")
 
     # ---------- #7 allowed-tools 最小化（加内容项，低权重）----------
-    # 两种合法写法都认：YAML 列表（- a / [a,b]）与官方 frontmatter 的逗号字符串（allowed-tools: Bash, Read）。
     raw_tools = fm.get("allowed-tools")
     if isinstance(raw_tools, list):
         tools = [str(t).strip() for t in raw_tools if str(t).strip()]
@@ -485,11 +497,55 @@ def check(root):
             "未声明 allowed-tools（继承会话全部工具）。",
             "可选：列出本 skill 真正需要的工具（如 Bash/Read/Write），减少越权面。")
 
+    # ---------- #11 paths / globs 文件作用域（Cursor 2.4+）----------
+    paths_val = fm.get("paths") or fm.get("globs")
+    if paths_val:
+        if isinstance(paths_val, list) and paths_val:
+            add("pathscope", "paths / globs 文件作用域", "PASS",
+                f"已声明文件作用域：{', '.join(str(p) for p in paths_val[:4])}。")
+        elif isinstance(paths_val, str) and paths_val.strip():
+            add("pathscope", "paths / globs 文件作用域", "PASS",
+                f"已声明文件作用域：{paths_val[:80]}。")
+        else:
+            add("pathscope", "paths / globs 文件作用域", "WARN",
+                "paths/globs 字段存在但为空。",
+                "删掉空字段，或写上 glob（如 src/**/*.ts）——只在匹配文件时加载 skill。")
+    else:
+        add("pathscope", "paths / globs 文件作用域", "INFO",
+            "未声明 paths/globs（全项目可见，多数 skill 这样即可）。",
+            "若 skill 只服务特定文件类型，可加 paths 减少误触发（Cursor 2.4+）。")
+
+    # ---------- #12 OpenClaw / 安装声明（分发到 ClawHub 时）----------
+    has_openclaw = False
+    meta = fm.get("metadata")
+    if isinstance(meta, dict) and any(k in meta for k in ("openclaw", "openclaw.compat")):
+        has_openclaw = True
+    elif isinstance(meta, str) and "openclaw" in meta.lower():
+        has_openclaw = True
+    has_install = bool(fm.get("requires") or fm.get("install"))
+    has_scripts = any(r.split(os.sep)[0].lower() in ("scripts", "script") for r in refs)
+    if has_openclaw or has_install:
+        add("openclaw", "OpenClaw 兼容声明", "PASS",
+            "检出 metadata.openclaw 或 requires/install 声明。")
+    elif has_scripts:
+        add("openclaw", "OpenClaw 兼容声明", "INFO",
+            "有 scripts/ 但未声明 requires/install。",
+            "若要发 ClawHub/OpenClaw，在 frontmatter 声明运行时依赖与安装方式。")
+    else:
+        add("openclaw", "OpenClaw 兼容声明", "INFO",
+            "纯指令型 skill，无 OpenClaw 安装声明需求。")
+
     # ---------- #8 别替模型补它已经会的 ----------
     teach_hits = []
+    body_lines = body.splitlines()
     for w in TEACHING:
         for m in re.finditer(re.escape(w), body, re.I):
-            teach_hits.append((w, body[:m.start()].count("\n") + 1 + body_offset))
+            ln = body[:m.start()].count("\n")
+            line = body_lines[ln] if ln < len(body_lines) else ""
+            # 评分表/盲区里举例黑名单词 → 元层面，跳过
+            if line.strip().startswith("|") or any(x in line for x in ("黑名单", "检查项", "待检测", "误报", "会误伤")):
+                continue
+            teach_hits.append((w, ln + 1 + body_offset))
     if not teach_hits:
         add("noteach", "别替模型补它已经会的（无教学冗余）", "PASS",
             "未检出「教通用写法/语言入门」类措辞。")

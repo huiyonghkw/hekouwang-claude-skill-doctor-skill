@@ -5,7 +5,7 @@ displayName: Claude Skill 体检器（SKILL.md Doctor）
 summary: Agent Skill（SKILL.md）体检器：评 description 触发质量 / 篇幅 / 渐进披露 / 脚本外置 / 可移植性 / 安全（无硬编码密钥），出评分卡 + 修复建议。零依赖，claude-md-doctor 的姊妹工具。
 license: MIT-0
 homepage: https://github.com/huiyonghkw/hekouwang-claude-skill-doctor-skill
-version: 1.4.1
+version: 1.5.0
 description: >
   会勇禾口王的AI笔记 · Agent Skill（SKILL.md）体检器。检查一个 Claude/Agent Skill 是否
   符合"按需加载的指令包，不是单文件巨石"的最佳实践——评 description 触发质量、SKILL.md
@@ -133,16 +133,18 @@ Skill 的命脉是两条，权重最高：
 | 2b | **description ≤ 1024 字符** | 在上限内，触发稳定 | 超长，可能被截断 |
 | 3 | **SKILL.md ≤ 500 行** | 路由器不是图书馆，按需加载越短越准 | >500 行；分版本/分平台/长流程全塞一个文件 |
 | 4 | **渐进披露（拆 references/）** | 长内容下沉独立 .md，正文留指针 | 正文很长却没有任何 references 拆分文件 |
-| 4b | **指针无死链** | 引用的 references/scripts/assets 都真实存在 | 指针指向不存在的文件（按图索骥扑空） |
+| 4b | **指针无死链** | 引用的 `references/*.md` 等带扩展名的捆绑资源真实存在 | 指针指向不存在的文件（按图索骥扑空） |
 | 5 | **脚本外置 scripts/** | 确定性代码（构建/截图/合成/转换）是 scripts/ 真文件 | 大段可执行代码内联在正文，每次靠模型重打 |
-| 6 | **可移植（无硬编码绝对路径）** | 用 `~`/`$HOME`/相对路径/占位 | 出现 `/Users/某人/`、`/home/某人/`——别人装上即失效 |
+| 6 | **可移植（无硬编码绝对路径）** | 用 `~`/`$HOME`/相对路径/占位 | 出现硬编码家目录绝对路径——别人装上即失效 |
 | 7 | **allowed-tools 最小化** | 声明本 skill 真正需要的工具 | 不声明（继承全部工具，越权面大）——可选项，低权重 |
 | 8 | **触发方式匹配（model vs user invoked）** | 只靠人手敲名字触发的 skill 设 `disable-model-invocation: true`（零 context load） | 明明只手动触发，却留着 description 当 model-invoked，每轮白占上下文（详见 references/skill-writing-vocab.md 第二节）——定性项 |
 | 10a | **别替模型补它已经会的（no-op 测试）** | 只装项目/品牌私有事实 | 有"语言入门/框架教程/如何使用"这类教学段——判据：**这段相对模型默认行为改变了什么？没有就删**（即 no-op；详见 vocab 第六节） |
 | 10b | **配套文档（README+CHANGELOG）** | 对外分发友好 | 缺失——纯自用可忽略，低权重 |
+| 11 | **paths / globs 作用域** | 文件专属 skill 声明 glob，减少误触发 | Cursor 2.4+ 可用；未声明 = INFO |
+| 12 | **OpenClaw 兼容声明** | 有 scripts/ 或发 ClawHub 时声明 requires/install | 纯指令 skill 可忽略——INFO |
 
 **分档**：A 优秀 ≥85 · B 良好 ≥70 · C 及格 ≥50 · D 建议重构 <50。
-（机检：PASS=1 / WARN=0.5 / FAIL=0，INFO 不计分。**按重要度加权**——安全红线 #0 与触发/减法核心项 #1/#2/#3/#4/#6/#10a 权重 1.5，标准项 #2b/#4b/#5 为 1.0，加内容项 #7/#10b 为 0.6。#0 命中按 FAIL 计且资损级，定性总评里应一票顶到「先改这条」。）
+（机检：PASS=1 / WARN=0.5 / FAIL=0，INFO 不计分。**按重要度加权**——安全红线 #0 与触发/减法核心项 #1/#2/#3/#4/#6/#10a 权重 1.5，标准项 #2b/#4b/#5/#11 为 1.0，加内容项 #7/#10b/#12 为 0.6。#0 命中按 FAIL 计且资损级，定性总评里应一票顶到「先改这条」。）
 
 ---
 
@@ -176,9 +178,9 @@ Skill 的命脉是两条，权重最高：
 
 - **拔密钥（最高优先）**：#0 命中时把明文移出 SKILL.md / 捆绑文件，改放 `.env` / 密钥管理器；命中即视为已泄露，提醒轮换并查 git 历史（skill 很可能已 push 到 GitHub）。
 - **修触发**：#2 不合格时给 description 补"何时用"句——列典型请求 / 触发词 / 适用场景，让模型判得出何时唤醒。
-- **瘦身 + 拆 references/**：#3/#4 不合格时，把 SKILL.md 按"版本/平台/流程"维度抽成 `references/xxx.md`，正文回归"精简路由 + 硬规矩 + 一张'做 X 读哪个文件'索引表"。一次拆一块、搬完 grep 核对不丢内容。
-- **外置 scripts/**：#5 命中时把确定性脚本（构建/截图/ffmpeg 合成/批量转换）抠成 `scripts/` 真文件，正文只留一行"跑 scripts/xxx"。
-- **去硬路径**：#6 命中时把 `/Users/某人/...` 换成 `~` / `$HOME` / 相对路径 / 「此 skill 目录」占位。
+- **瘦身 + 拆 references/**：#3/#4 不合格时，把 SKILL.md 按「版本/平台/流程」维度抽到 `references/` 下的独立 `.md`，正文回归「精简路由 + 硬规矩 + 索引表」。
+- **外置 scripts/**：#5 命中时把确定性脚本抠成 `scripts/` 真文件，正文只留一行调用说明。
+- **去硬路径**：#6 命中时把硬编码家目录路径换成 `~` / `$HOME` / 相对路径 / 「此 skill 目录」占位。
 - **删教学冗余**：#10a 确认是"教通用写法/框架用法"的删掉——skill 只装模型不可能知道的私有事实。
 - **修死链**：#4b 报的死指针——补上缺失文件，或修正/删除指针。
 - 改完**重新跑一次 `check.py`** 给前后对比分数。

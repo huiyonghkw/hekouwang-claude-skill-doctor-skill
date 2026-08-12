@@ -2,6 +2,19 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.5.0] - 2026-08-12
+
+### 新增
+- **#11 paths / globs**：识别 Cursor 2.4+ 文件作用域 frontmatter，减少无关文件时的误触发。
+- **#12 OpenClaw 兼容声明**：轻量检查 `metadata.openclaw`、`requires`、`install`（有 scripts/ 时提示）。
+
+### Fixed
+- **指针扫描误报**：只匹配带扩展名的捆绑资源路径（`references/foo.md`），表格里的
+  `references/scripts/assets` 不再被判死链。
+- **可移植性自检误报**：`ABS_PATH_RE` 用字符串拼接构建，避免 `check.py` 源码里的
+  正则说明行被当成硬编码路径。
+- **#10a 元层面误报**：评分表/检查项表格行里的黑名单示例词不再计为教学冗余。
+
 ## [1.4.1] - 2026-08-01
 
 修 #0 安全红线的两处假阳性。**假阳性会让红线失去意义**——被误报训练过的人下次看到真 FAIL 也只会挥手放过。
