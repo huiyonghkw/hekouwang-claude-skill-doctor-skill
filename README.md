@@ -6,7 +6,14 @@
 给 **Agent Skill（SKILL.md）** 做体检的工具。把"Skill 是按需加载的指令包、不是单文件巨石"
 这条最佳实践，做成一个能跑在任何 skill 上的检查器：机检定量 + 模型定性，产出评分卡和可落地的修复建议。
 
-姊妹工具：[`hekouwang-claude-md-doctor-skill`](https://github.com/huiyonghkw/hekouwang-claude-md-doctor-skill)（体检 CLAUDE.md）。
+## 30 秒验收
+
+```bash
+python3 check.py path/to/your-skill    # 体检任意 skill 目录
+bash scripts/run-all-doctors.sh .      # 三件套（需已装 md-doctor + env-doctor）
+```
+
+姊妹工具：[`hekouwang-claude-md-doctor-skill`](https://github.com/huiyonghkw/hekouwang-claude-md-doctor-skill)（体检 AGENTS.md / CLAUDE.md）。
 
 ## 核心判据
 
@@ -76,8 +83,18 @@ docker run --rm -v "$PWD:/work" claude-skill-doctor /work --json
 
 ## 免费 / 付费
 
+| | 免费（开源） | 付费增值 |
+|---|---|---|
+| 机检 | `check.py` 文本/JSON + ASCII 评分条 | 品牌可视化报告卡 |
+| CI | 退出码卡关 | — |
+| 联系 | GitHub Issue | **@huiyonghkw**（ClawHub / GitHub） |
+
 - **免费**：`check.py` 的文本 / JSON 报告 + 评分，随便用、可进 CI。
 - **付费增值**：品牌可视化体检报告卡（精美分享图），找 `@huiyonghkw`。
+
+## 体检器三件套
+
+[`md-doctor`](https://github.com/huiyonghkw/hekouwang-claude-md-doctor-skill) · [`env-doctor`](https://github.com/huiyonghkw/hekouwang-env-doctor-skill) · 一键 `bash scripts/run-all-doctors.sh`（见 `references/doctor-suite.md`）。
 
 ---
 

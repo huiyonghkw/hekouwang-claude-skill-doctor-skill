@@ -2,6 +2,15 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.5.1] - 2026-08-12
+
+### 新增
+- `scripts/run-all-doctors.sh`、`references/doctor-suite.md`（与 md-doctor / env-doctor 同版）
+
+### 变更
+- `check.py`：付费报告卡 CTA；README 30 秒验收 + 免费/付费表 + 三件套互链
+- summary 补英文 SEO 关键词（skill lint / SKILL.md doctor）
+
 ## [1.5.0] - 2026-08-12
 
 ### 新增

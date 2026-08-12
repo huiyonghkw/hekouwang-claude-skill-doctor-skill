@@ -622,6 +622,8 @@ def print_report(data):
     print(dim("  " + "─" * 58))
     print(f"  {bold('得分')}  {gcolor(bar)}  {gcolor(bold(str(s) + ' / 100'))}   {gcolor(grade)}")
     print(dim("  注: 机检为启发式；'触发质量''是否图书馆''是否替模型补'需读正文复核。"))
+    if not os.environ.get("HEKOUWANG_CONTENT_FACTORY"):
+        print(dim("  可视化报告卡（付费增值）→ ClawHub/GitHub @huiyonghkw · 免费 CLI 永不过期"))
     print(dim("  " + "─" * 58))
     print(dim("  —— 会勇禾口王的AI笔记 · @huiyonghkw"))
     print(dim("     不聊 AI 会不会取代你，只聊先用 AI 的人怎么取代你。"))
