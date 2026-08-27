@@ -450,7 +450,8 @@ def check(root):
             f"{len(uniq_ptr)} 个被引用的捆绑资源全部存在。")
     else:
         show = "; ".join(f"L{n}:{p}" for p, n in dead[:6]) + (" …" if len(dead) > 6 else "")
-        add("pointers", "捆绑资源指针无死链", "WARN",
+        # 死链是确定性事实，不是风格建议：判 FAIL 才能在 pre-push 快照里拦住漏提交。
+        add("pointers", "捆绑资源指针无死链", "FAIL",
             f"{len(dead)} 处指针指向不存在的文件：{show}",
             "补上缺失文件，或修正/删除指针——模型按图索骥扑空比没指针更糟。")
 

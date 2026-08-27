@@ -5,7 +5,7 @@ displayName: Claude Skill 体检器（SKILL.md Doctor）
 summary: Agent Skill lint / SKILL.md doctor / skillspec audit — description 触发、渐进披露、可移植性与 OpenClaw 兼容检查。姊妹工具 md-doctor。
 license: MIT-0
 homepage: https://github.com/huiyonghkw/hekouwang-claude-skill-doctor-skill
-version: 1.5.2
+version: 1.6.0
 description: >
   会勇禾口王的AI笔记 · Agent Skill（SKILL.md）体检器。检查一个 Claude/Agent Skill 是否
   符合"按需加载的指令包，不是单文件巨石"的最佳实践——评 description 触发质量、SKILL.md
@@ -133,7 +133,7 @@ Skill 的命脉是两条，权重最高：
 | 2b | **description ≤ 1024 字符** | 在上限内，触发稳定 | 超长，可能被截断 |
 | 3 | **SKILL.md ≤ 500 行** | 路由器不是图书馆，按需加载越短越准 | >500 行；分版本/分平台/长流程全塞一个文件 |
 | 4 | **渐进披露（拆 references/）** | 长内容下沉独立 .md，正文留指针 | 正文很长却没有任何 references 拆分文件 |
-| 4b | **指针无死链** | 引用的 `references/*.md` 等带扩展名的捆绑资源真实存在 | 指针指向不存在的文件（按图索骥扑空） |
+| 4b | **指针无死链** | 引用的 `references/*.md` 等带扩展名的捆绑资源真实存在 | 指针指向不存在的文件 → **直接 FAIL**（是确定性事实不是风格建议；漏提交的文件不在 push 快照里，只扣分就拦不住）<br>正反例：`bash tests/test-dead-pointer.sh` |
 | 5 | **脚本外置 scripts/** | 确定性代码（构建/截图/合成/转换）是 scripts/ 真文件 | 大段可执行代码内联在正文，每次靠模型重打 |
 | 6 | **可移植（无硬编码绝对路径）** | 用 `~`/`$HOME`/相对路径/占位 | 出现硬编码家目录绝对路径——别人装上即失效 |
 | 7 | **allowed-tools 最小化** | 声明本 skill 真正需要的工具 | 不声明（继承全部工具，越权面大）——可选项，低权重 |
