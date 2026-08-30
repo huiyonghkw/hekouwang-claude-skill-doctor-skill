@@ -36,4 +36,14 @@ jobs:
           fi
 
       - name: JSON output is valid
-        run: python3 check.py tests/fixtures/good --json | python3 -c "import json,sys; json.load(sys.stdin)"
+        run: |
+          python3 check.py tests/fixtures/good --json > "$RUNNER_TEMP/skill-doctor-good.json"
+          python3 -c 'import json,sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
+            "$RUNNER_TEMP/skill-doctor-good.json"
+
+      - name: Regression tests for parser, pointers, and scan
+        run: |
+          bash tests/test-dead-pointer.sh
+          bash tests/test-frontmatter.sh
+          bash tests/test-scan.sh
+          bash tests/test-suite-fail-closed.sh

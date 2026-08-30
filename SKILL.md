@@ -5,12 +5,12 @@ displayName: Claude Skill 体检器（SKILL.md Doctor）
 summary: Agent Skill lint / SKILL.md doctor / skillspec audit — description 触发、渐进披露、可移植性与 OpenClaw 兼容检查。姊妹工具 md-doctor。
 license: MIT-0
 homepage: https://github.com/huiyonghkw/hekouwang-claude-skill-doctor-skill
-version: 1.6.0
+version: 1.7.0
 description: >
   会勇禾口王的AI笔记 · Agent Skill（SKILL.md）体检器。检查一个 Claude/Agent Skill 是否
   符合"按需加载的指令包，不是单文件巨石"的最佳实践——评 description 触发质量、SKILL.md
   篇幅、渐进披露（references/ 拆分）、脚本外置、可移植性（无硬编码绝对路径）、安全（无硬编码
-  密钥），给出评分卡 + 按优先级的修复建议，并可代为重构。触发：用户说「检查我的 skill /
+  密钥、宿主元数据与多 Skill 发现冲突），给出评分卡 + 按优先级的修复建议，并可代为重构。触发：用户说「检查我的 skill /
   SKILL.md 体检 / 这个 skill 规范吗 / claude-skill-doctor / audit skill / lint SKILL.md /
   我的 skill 太长了 / skill 拆分 / 看看我的 skill 合不合规 / skill 对齐官方规范」。
   任何"评估/审查/优化某个 Agent Skill 质量或结构"的请求都应触发。
@@ -67,6 +67,10 @@ Skill 的命脉是两条，权重最高：
    python3 <此skill目录>/check.py <skill目录>
    ```
    - 需要结构化结果时加 `--json`。退出码：有 FAIL → 1，否则 0。
+   - 需要盘点一个宿主目录或仓库里的全部 Skill 时运行：
+     `python3 <此skill目录>/check.py --scan <skill根目录> --json`。
+     主机只看根目录直接入口时加 `--direct`；默认递归模式会跳过测试夹具和构建目录。
+     扫描会识别隐藏宿主目录、断开的软链、真实入口去重和重复 name；JSON 的 `gate` 才是门禁真值，不能只看 score/grade。
 2b. **深度安全扫描（可选 · 外部工具 SkillSpector）**：`check.py` 的 #0 只做密钥正则；当要查**提示注入 / 数据外泄 / 隐藏指令 / 供应链 / 过度授权 / MCP 越权**等 68 类模式时，叠加跑 [SkillSpector](https://github.com/NVIDIA/skillspector)（本机已装：`uv tool install`，需 Python 3.12/3.13）：
    ```bash
    env -u ALL_PROXY -u all_proxy -u HTTPS_PROXY -u https_proxy \
@@ -123,7 +127,7 @@ Skill 的命脉是两条，权重最高：
 
 ---
 
-## 评分标准（12 项 · 也是机检的判分依据）
+## 评分标准（核心维度 + 宿主兼容门禁）
 
 | # | 检查项 | 合格长什么样 | 不合格信号 |
 |---|--------|------------|-----------|
@@ -138,6 +142,8 @@ Skill 的命脉是两条，权重最高：
 | 6 | **可移植（无硬编码绝对路径）** | 用 `~`/`$HOME`/相对路径/占位 | 出现硬编码家目录绝对路径——别人装上即失效 |
 | 7 | **allowed-tools 最小化** | 声明本 skill 真正需要的工具 | 不声明（继承全部工具，越权面大）——可选项，低权重 |
 | 8 | **触发方式匹配（model vs user invoked）** | 只靠人手敲名字触发的 skill 设 `disable-model-invocation: true`（零 context load） | 明明只手动触发，却留着 description 当 model-invoked，每轮白占上下文（详见 references/skill-writing-vocab.md 第二节）——定性项 |
+| 8b | **文本文件可读取** | 纳入扫描的文本文件能读取；密钥文件按红线规则跳过 | 读取失败不能静默当成“没有问题”——直接 FAIL |
+| 8c | **Skill 身份可辨认** | 目录名和 frontmatter name 对齐，或明确是宿主软链别名 | 多入口重名/别名未说明时，扫描报告会提示 |
 | 10a | **别替模型补它已经会的（no-op 测试）** | 只装项目/品牌私有事实 | 有"语言入门/框架教程/如何使用"这类教学段——判据：**这段相对模型默认行为改变了什么？没有就删**（即 no-op；详见 vocab 第六节） |
 | 10b | **配套文档（README+CHANGELOG）** | 对外分发友好 | 缺失——纯自用可忽略，低权重 |
 | 11 | **paths / globs 作用域** | 文件专属 skill 声明 glob，减少误触发 | Cursor 2.4+ 可用；未声明 = INFO |
@@ -145,6 +151,10 @@ Skill 的命脉是两条，权重最高：
 
 **分档**：A 优秀 ≥85 · B 良好 ≥70 · C 及格 ≥50 · D 建议重构 <50。
 （机检：PASS=1 / WARN=0.5 / FAIL=0，INFO 不计分。**按重要度加权**——安全红线 #0 与触发/减法核心项 #1/#2/#3/#4/#6/#10a 权重 1.5，标准项 #2b/#4b/#5/#11 为 1.0，加内容项 #7/#10b/#12 为 0.6。#0 命中按 FAIL 计且资损级，定性总评里应一票顶到「先改这条」。）
+
+**门禁口径**：score/grade 是质量参考，`gate` 才是自动化是否放行的真值。
+任何 FAIL、frontmatter 解析错误、文本读取错误都会让 gate=FAIL；多 Skill `--scan`
+还会把断链、遍历错误和重复 name 纳入全局门禁。外部软链是否计入项目门禁，由调用方明确声明。
 
 ---
 

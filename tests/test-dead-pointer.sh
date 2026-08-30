@@ -46,5 +46,39 @@ if ! python3 "$CHECK" "$TMP/alive" >/dev/null 2>&1; then
 fi
 echo '  ✅ 指针齐全被放过'
 
+echo '== 教学示例路径不应被当成指针 =='
+mkdir -p "$TMP/inline"
+printf '%s\n' \
+  '---' \
+  'name: inline-example' \
+  'description: 验证教学示例路径不会误报。当需要检查指针解析边界时使用。' \
+  '---' \
+  '' \
+  'Example: `scripts/rotate_pdf.py` is a hypothetical script.' > "$TMP/inline/SKILL.md"
+if ! python3 "$CHECK" "$TMP/inline" >/dev/null 2>&1; then
+  echo '  ❌ 教学示例路径被误判为死链'
+  exit 1
+fi
+echo '  ✅ 教学示例路径被放过'
+
+echo '== 越根路径必须判 FAIL =='
+mkdir -p "$TMP/escape"
+printf '%s\n' \
+  '---' \
+  'name: escape-fixture' \
+  'description: 验证越根路径不会被放过。当需要检查资源作用域时使用。' \
+  '---' \
+  '' \
+  '[越界资源](references/../../outside.md)' > "$TMP/escape/SKILL.md"
+if ESCAPE_OUTPUT=$(python3 "$CHECK" "$TMP/escape" 2>&1); then
+  echo '  ❌ 越根路径被错误放行'
+  exit 1
+fi
+if ! printf '%s' "$ESCAPE_OUTPUT" | grep -q '越过 skill 根目录'; then
+  echo '  ❌ 越根路径失败原因未说明作用域越界'
+  exit 1
+fi
+echo '  ✅ 越根路径被阻断'
+
 echo
 echo '指针死链正反例验证通过。'

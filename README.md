@@ -40,6 +40,19 @@ python3 check.py <skill目录> --json   # 机器可读 JSON（CI 可用）
 
 退出码：有 FAIL → 1，否则 0（可用于 CI 卡关）。
 
+### 盘点多个 Skill
+
+当传入的是宿主 Skill 根目录或仓库父目录时，用扫描模式。主机目录通常只看直接入口：
+
+```bash
+python3 check.py --scan --direct ~/.claude/skills --json
+python3 check.py --scan /path/to/repository --json
+```
+
+默认递归扫描会跳过测试夹具和构建目录；direct 模式只检查根目录下一层的宿主入口。
+两种模式都会识别隐藏宿主目录、断开的软链、真实入口去重和重复 name。自动化应读取 JSON
+里的 gate 字段；score/grade 只是质量参考，不能替代门禁判断。
+
 ### Docker（不想装 Python 也能跑）
 
 ```bash
@@ -65,7 +78,7 @@ docker run --rm -v "$PWD:/work" claude-skill-doctor /work --json
 
 本仓库自身的 CI 见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)（语法 + good/bad 夹具 + JSON 合法性）。
 
-## 检查项（12 项加权）
+## 检查项与门禁
 
 | 权重 | 项 |
 |---|---|
@@ -74,6 +87,9 @@ docker run --rm -v "$PWD:/work" claude-skill-doctor /work --json
 | 0.6（加内容） | allowed-tools 最小化 · 配套文档(README+CHANGELOG) |
 
 分档：A ≥85 · B ≥70 · C ≥50 · D <50。
+
+除此之外，Doctor 还会把 frontmatter 解析错误、宿主调用策略冲突、文本读取失败、
+目录身份不一致、断链和重名作为可审计结果输出。任何 FAIL 都会使 gate=FAIL。
 
 ## 机检 vs 定性
 

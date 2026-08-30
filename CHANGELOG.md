@@ -2,6 +2,30 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.7.0] - 2026-08-30
+
+### 新增
+- **多 Skill 扫描**：新增 `--scan`，递归发现隐藏宿主目录，按真实 SKILL.md 去重，
+  报告断开的软链、重复 name、遍历错误和每个 Skill 的门禁结果；新增 `--direct`
+  供宿主根目录只盘点直接入口，递归模式跳过测试夹具和构建目录。
+- **显式门禁字段**：文本和 JSON 报告新增 Doctor 版本、schema 版本、PASS/WARN/FAIL/INFO
+  计数与 `gate`；自动化不再用 score/grade 猜是否放行。
+- **宿主调用策略检查**：读取 `disable-model-invocation` 与 `agents/openai.yaml` 的
+  `policy.allow_implicit_invocation`，发现冲突时阻断。
+
+### Fixed
+- frontmatter 解析支持 UTF-8 BOM、嵌套 mapping、布尔值和 YAML 解析错误，不再把嵌套
+  `metadata.openclaw` 静默当成不存在；兼容跨行 JSON 风格的 flow mapping/list。
+- 指针检查只认 Markdown link destination 或显式 `doctor:resource`，并校验 glob、
+  brace expansion、软链目标和根目录 containment；修复教学示例路径误报。
+- 文本扫描覆盖 YAML/HTML/TypeScript 等逻辑文件，但继续严格跳过 `.env`、`*.key`、
+  `*.pem` 和包含 secret 的文件名；读取失败改为 FAIL，不再静默跳过。
+- 三件套聚合器改为 fail-closed：doctor 崩溃、JSON 损坏和 env-doctor 非零退出都会
+  让套件失败；外部软链 Skill 仍可只做提示。
+
+### Tests
+- 新增 frontmatter、保护文件、扫描、断链、重名、示例路径和越根路径回归。
+
 ## [1.6.0] - 2026-08-27
 
 ### 变更
