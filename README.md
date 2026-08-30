@@ -36,9 +36,19 @@ bash scripts/run-all-doctors.sh .      # 三件套（需已装 md-doctor + env-d
 ```bash
 python3 check.py <skill目录>          # 输出彩色报告
 python3 check.py <skill目录> --json   # 机器可读 JSON（CI 可用）
+python3 check.py <skill目录> --profile codex  # 严格校验 Codex 基础契约
 ```
 
 退出码：有 FAIL → 1，否则 0（可用于 CI 卡关）。
+
+### Codex 严格基础契约（可选）
+
+默认 `agent` Profile 服务于 Claude/Codex/其他宿主共用的 Skill：合法的 `slug`、`version` 等宿主扩展字段不会被误伤。
+如果你要按 Codex `skill-creator` 的基础规范验收一个纯 Codex Skill，附加 `--profile codex`：只允许
+`name`、`description`、`license`、`allowed-tools`、`metadata`，并把不合规 kebab-case、description
+中的尖括号和正文未完成的 `[TODO: ...]` 纳入 `gate`。报告 JSON 的 `profile` 字段会明确本次使用的档位。
+
+这是一层可选的严格契约，不取代 Doctor 原有的跨宿主质量、安全、指针和扫描检查。
 
 ### 盘点多个 Skill
 
@@ -47,6 +57,7 @@ python3 check.py <skill目录> --json   # 机器可读 JSON（CI 可用）
 ```bash
 python3 check.py --scan --direct ~/.claude/skills --json
 python3 check.py --scan /path/to/repository --json
+python3 check.py --scan /path/to/codex-skills --profile codex --json
 ```
 
 默认递归扫描会跳过测试夹具和构建目录；direct 模式只检查根目录下一层的宿主入口。
@@ -88,7 +99,8 @@ docker run --rm -v "$PWD:/work" claude-skill-doctor /work --json
 
 分档：A ≥85 · B ≥70 · C ≥50 · D <50。
 
-除此之外，Doctor 还会把 frontmatter 解析错误、宿主调用策略冲突、文本读取失败、
+启用 `--profile codex` 时，Doctor 还会把 Codex 字段白名单、严格 name、description 与正文 TODO
+纳入核心门禁；默认 `agent` Profile 不启用这层检查。除此之外，Doctor 还会把 frontmatter 解析错误、宿主调用策略冲突、文本读取失败、
 目录身份不一致、断链和重名作为可审计结果输出。任何 FAIL 都会使 gate=FAIL。
 
 ## 机检 vs 定性

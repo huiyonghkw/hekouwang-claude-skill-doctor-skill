@@ -37,7 +37,8 @@ import sys
 
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 assert data["kind"] == "skill-scan", data
-assert data["schema_version"] == 2, data
+assert data["schema_version"] == 3, data
+assert data["profile"] == "agent", data
 assert data["gate"] == "FAIL", data
 assert data["entry_count"] == 3, data
 assert data["skill_count"] == 2, data

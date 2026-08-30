@@ -15,8 +15,10 @@ hekouwang-claude-skill-doctor-skill · Agent Skill 体检器（确定性机检�
 用法:
     python3 check.py [skill目录]          # 默认当前目录；目录里要有 SKILL.md
     python3 check.py [skill目录] --json    # 机器可读 JSON
+    python3 check.py [skill目录] --profile codex  # 叠加 Codex 严格基础契约
     python3 check.py --scan [skill根目录]  # 递归盘点多个 Skill、软链和重名
     python3 check.py --scan --direct [宿主根目录]  # 只盘点当前宿主直接入口
+    python3 check.py --scan [skill根目录] --profile codex  # 批量执行 Codex Profile
 
 退出码: 有 FAIL → 1，否则 0。
 
@@ -32,8 +34,8 @@ import json
 import glob as _glob
 import argparse
 
-DOCTOR_VERSION = "1.7.0"
-REPORT_SCHEMA_VERSION = 2
+DOCTOR_VERSION = "1.8.0"
+REPORT_SCHEMA_VERSION = 3
 
 # ---------- 终端着色 ----------
 _TTY = sys.stdout.isatty()
@@ -61,7 +63,7 @@ IMPORTANCE = {
     "pointers": 1.0, "scripts": 1.0, "desclen": 1.0,
     "pathscope": 1.0, "openclaw": 0.6,
     "tools": 0.6, "companion": 0.6, "readability": 1.0,
-    "invocation": 0.6, "identity": 0.6,
+    "invocation": 0.6, "identity": 0.6, "codex": 1.5,
 }
 
 IGNORE_DIRS = {
@@ -81,6 +83,11 @@ STANDARD_FM_KEYS = {
     "name", "description", "allowed-tools", "license", "metadata",
     "paths", "globs", "requires", "install", "disable-model-invocation",
 }
+
+# Codex skill-creator 的严格入口契约。它与默认 Agent Profile 分开，
+# 因为 Claude/跨宿主 Skill 合法地可能带 slug、version 或运行时扩展字段。
+CODEX_FM_KEYS = {"name", "description", "license", "allowed-tools", "metadata"}
+PROFILES = {"agent", "codex"}
 
 # ---------- description 里的"何时用/触发"信号（#2 的判据）----------
 # description 必须回答两问：做什么 + 何时用。只写"做什么"会让模型不知道何时唤醒。
@@ -420,6 +427,30 @@ def analyze_body(body, line_offset=0):
     return info
 
 
+def unfinished_todo_lines(body, line_offset=0):
+    """返回正文中不在代码围栏内的未完成 TODO 占位符行号。"""
+    todo_lines = []
+    fence_marker = None
+    fence_length = 0
+    fence_re = re.compile(r"^[ \t]*(?:(?:[-+*]|\d+[.)])[ \t]+)?(`{3,}|~{3,})(.*)$")
+    todo_re = re.compile(r"[ ]{0,3}\[TODO:[^\n]*\][ \t]*$")
+    for index, line in enumerate(body.splitlines()):
+        fence = fence_re.match(line)
+        if fence:
+            marker = fence.group(1)
+            if fence_marker is None:
+                fence_marker = marker[0]
+                fence_length = len(marker)
+            elif (marker[0] == fence_marker and len(marker) >= fence_length
+                  and not fence.group(2).strip()):
+                fence_marker = None
+                fence_length = 0
+            continue
+        if fence_marker is None and todo_re.fullmatch(line):
+            todo_lines.append(index + 1 + line_offset)
+    return todo_lines
+
+
 def list_skill_files(root):
     """返回 skill 目录里的相关文件（剔除 .git 等）。"""
     out = []
@@ -594,7 +625,9 @@ def _invocation_policy(root, fm):
     return mode, sources, errors, os.path.isfile(yaml_path)
 
 
-def check(root):
+def check(root, profile="agent"):
+    if profile not in PROFILES:
+        raise ValueError(f"未知 Profile：{profile}")
     results = []
     def add(key, title, status, detail, fix=""):
         results.append({"key": key, "title": title, "status": status,
@@ -616,7 +649,7 @@ def check(root):
             ("该目录下这些子目录才是 skill，请逐个指定：" + ", ".join(nested[:10]))
             if nested else "确认传入的是单个 skill 目录（里面要有 SKILL.md）。")
         return {
-            "root": root, "root_real": root_real, "results": results,
+            "root": root, "root_real": root_real, "profile": profile, "results": results,
             "info": {}, "fm": {}, "fm_errors": [], "refs": [], "allfiles": [],
             "read_errors": [], "name": "",
         }
@@ -629,7 +662,7 @@ def check(root):
             f"SKILL.md 无法读取（{type(exc).__name__}）。",
             "修正文件权限；检查器不能把入口文件读取失败当成通过。")
         return {
-            "root": root, "root_real": root_real, "results": results,
+            "root": root, "root_real": root_real, "profile": profile, "results": results,
             "info": {}, "fm": {}, "fm_errors": [], "refs": [], "allfiles": [],
             "read_errors": [("SKILL.md", type(exc).__name__)], "name": "",
         }
@@ -700,6 +733,38 @@ def check(root):
         note = f"（另有非标准字段 {', '.join(nonstd)}，runtime 不读，可留可删）" if nonstd else ""
         add("frontmatter", "frontmatter 必填齐全且合法", "PASS",
             f"name/description 齐全，name 格式合规。{note}")
+
+    # ---------- 可选 Codex Profile：迁入 skill-creator 的严格基础契约 ----------
+    if profile == "codex":
+        codex_errors = []
+        unexpected = sorted(set(fm) - CODEX_FM_KEYS)
+        if fm_errors:
+            codex_errors.append("frontmatter 无法解析")
+        if unexpected:
+            codex_errors.append("不支持字段：" + ", ".join(unexpected))
+        if not isinstance(raw_name, str) or not raw_name:
+            codex_errors.append("name 必须是非空字符串")
+        elif (not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", raw_name)
+              or len(raw_name) > 64):
+            codex_errors.append("name 必须是 ≤64 字符的 kebab-case，且不能连续连字符")
+        if not isinstance(raw_desc, str) or not raw_desc:
+            codex_errors.append("description 必须是非空字符串")
+        elif raw_desc.startswith("[TODO:"):
+            codex_errors.append("description 含未完成 TODO")
+        elif "<" in raw_desc or ">" in raw_desc:
+            codex_errors.append("description 不能含尖括号")
+        elif len(raw_desc) > 1024:
+            codex_errors.append("description 超过 1024 字符")
+        todo_lines = unfinished_todo_lines(body, body_offset)
+        if todo_lines:
+            codex_errors.append("正文含未完成 TODO：" + ", ".join(f"L{line}" for line in todo_lines[:6]))
+        if codex_errors:
+            add("codex", "Codex 基础规范 Profile", "FAIL",
+                "；".join(codex_errors),
+                "仅保留 name/description/license/allowed-tools/metadata；清理 TODO、尖括号和不合规字段。")
+        else:
+            add("codex", "Codex 基础规范 Profile", "PASS",
+                "通过 skill-creator 的零依赖基础契约：字段白名单、name、description 与 TODO 均合规。")
 
     # ---------- #2 description 写清「做什么 + 何时用」（触发质量）----------
     has_when = any(re.search(p, desc, re.I) for p in WHEN_SIGNALS)
@@ -941,7 +1006,7 @@ def check(root):
             "可选：要对外分发就补上；纯自用可忽略。")
 
     return {
-        "root": root, "root_real": root_real, "results": results,
+        "root": root, "root_real": root_real, "profile": profile, "results": results,
         "info": info, "fm": fm, "fm_errors": fm_errors,
         "refs": refs, "allfiles": allfiles, "name": name,
         "read_errors": read_errors,
@@ -973,7 +1038,8 @@ def print_report(data):
     print()
     print(bold("  SKILL DOCTOR  ") + dim(" · Agent Skill 体检报告"))
     print(dim("  会勇禾口王的AI笔记 · @huiyonghkw"))
-    print(dim("  Doctor: " + DOCTOR_VERSION + " · 报告 schema: " + str(REPORT_SCHEMA_VERSION)))
+    print(dim("  Doctor: " + DOCTOR_VERSION + " · 报告 schema: " + str(REPORT_SCHEMA_VERSION)
+              + " · Profile: " + data.get("profile", "agent")))
     print(dim("  目标: " + data["root"]))
     if data.get("name"):
         info = data["info"]
@@ -1064,7 +1130,7 @@ def _discover_skill_mds(root, recursive=True):
     return candidates, sorted(set(broken)), errors
 
 
-def scan_skills(root, recursive=True):
+def scan_skills(root, recursive=True, profile="agent"):
     """递归盘点 Skill 入口，按真实 SKILL.md 去重并检查重名。"""
     root = os.path.abspath(root)
     candidates, broken, errors = _discover_skill_mds(root, recursive=recursive)
@@ -1077,7 +1143,7 @@ def scan_skills(root, recursive=True):
     skills = []
     names = {}
     for real_md, entry_paths in sorted(groups.items()):
-        data = check(os.path.dirname(real_md))
+        data = check(os.path.dirname(real_md), profile=profile)
         summary = result_summary(data["results"])
         item = {
             "path": os.path.dirname(real_md),
@@ -1112,6 +1178,7 @@ def scan_skills(root, recursive=True):
         "doctor_version": DOCTOR_VERSION,
         "schema_version": REPORT_SCHEMA_VERSION,
         "root": root,
+        "profile": profile,
         "recursive": recursive,
         "gate": gate,
         "entry_count": len(candidates),
@@ -1129,7 +1196,8 @@ def print_scan_report(data):
     print(bold("  SKILL DOCTOR  ") + dim(" · 多 Skill 扫描"))
     mode = "递归" if data.get("recursive", True) else "宿主直接入口"
     print(dim("  Doctor: " + data["doctor_version"] + " · 报告 schema: "
-              + str(data["schema_version"]) + " · 模式: " + mode))
+              + str(data["schema_version"]) + " · 模式: " + mode
+              + " · Profile: " + data.get("profile", "agent")))
     print(dim("  目标: " + data["root"]))
     print()
     gate_color = red if data["gate"] == "FAIL" else green
@@ -1165,18 +1233,20 @@ def main():
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     ap.add_argument("--scan", action="store_true", help="递归扫描目录下的多个 Skill")
     ap.add_argument("--direct", action="store_true", help="扫描时只看根目录下一层宿主入口")
+    ap.add_argument("--profile", choices=sorted(PROFILES), default="agent",
+                    help="规范 Profile：agent（默认）或 codex（严格基础契约）")
     ap.add_argument("--version", action="version", version=DOCTOR_VERSION)
     args = ap.parse_args()
 
     if args.scan:
-        data = scan_skills(args.path, recursive=not args.direct)
+        data = scan_skills(args.path, recursive=not args.direct, profile=args.profile)
         if args.json:
             print(json.dumps(data, ensure_ascii=False, indent=2))
         else:
             print_scan_report(data)
         sys.exit(1 if data["gate"] == "FAIL" else 0)
 
-    data = check(args.path)
+    data = check(args.path, profile=args.profile)
     summary = result_summary(data["results"])
 
     if args.json:
@@ -1185,6 +1255,7 @@ def main():
             "kind": "skill-check",
             "doctor_version": DOCTOR_VERSION,
             "schema_version": REPORT_SCHEMA_VERSION,
+            "profile": data.get("profile", args.profile),
             "root": data["root"],
             "root_real": data.get("root_real"),
             "name": data.get("name"),

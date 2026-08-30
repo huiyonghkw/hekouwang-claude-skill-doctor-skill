@@ -2,6 +2,22 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.8.0] - 2026-08-30
+
+### 新增
+- **Codex 严格基础 Profile**：新增 `--profile codex`，以零依赖方式迁入 Codex
+  `skill-creator` 的基础契约：字段白名单、≤64 字符 kebab-case name、description 限制与正文
+  未完成 TODO 检查。该 Profile 可用于单个 Skill 或 `--scan` 批量门禁。
+- JSON/文本报告明确输出本次 `profile`；报告 schema 升至 v3，避免自动化把默认跨宿主检查和
+  严格 Codex 验收混为一谈。
+
+### 兼容性
+- 默认 `agent` Profile 保持原行为，允许 Claude/其他宿主合法的扩展字段（如 `slug`、`version`）；
+  只有显式传入 `--profile codex` 才执行严格白名单，避免跨宿主 Skill 被错误阻断。
+
+### Tests
+- 新增合法 Codex Skill、严格拒绝扩展字段与 TODO、默认跨宿主扩展字段可通过的正反例回归；CI 同步执行。
+
 ## [1.7.0] - 2026-08-30
 
 ### 新增

@@ -5,7 +5,7 @@ displayName: Claude Skill 体检器（SKILL.md Doctor）
 summary: Agent Skill lint / SKILL.md doctor / skillspec audit — description 触发、渐进披露、可移植性与 OpenClaw 兼容检查。姊妹工具 md-doctor。
 license: MIT-0
 homepage: https://github.com/huiyonghkw/hekouwang-claude-skill-doctor-skill
-version: 1.7.0
+version: 1.8.0
 description: >
   会勇禾口王的AI笔记 · Agent Skill（SKILL.md）体检器。检查一个 Claude/Agent Skill 是否
   符合"按需加载的指令包，不是单文件巨石"的最佳实践——评 description 触发质量、SKILL.md
@@ -67,8 +67,11 @@ Skill 的命脉是两条，权重最高：
    python3 <此skill目录>/check.py <skill目录>
    ```
    - 需要结构化结果时加 `--json`。退出码：有 FAIL → 1，否则 0。
+   - 默认 Profile 是跨宿主的 `agent`；要按 Codex `skill-creator` 的严格基础契约验收时，加
+     `--profile codex`。它只允许 `name`、`description`、`license`、`allowed-tools`、`metadata`，
+     并阻断不合规 name、description 尖括号和正文未完成 TODO；不适用于带 Claude/宿主扩展字段的 Skill。
    - 需要盘点一个宿主目录或仓库里的全部 Skill 时运行：
-     `python3 <此skill目录>/check.py --scan <skill根目录> --json`。
+     `python3 <此skill目录>/check.py --scan <skill根目录> --json`；同样可附 `--profile codex`。
      主机只看根目录直接入口时加 `--direct`；默认递归模式会跳过测试夹具和构建目录。
      扫描会识别隐藏宿主目录、断开的软链、真实入口去重和重复 name；JSON 的 `gate` 才是门禁真值，不能只看 score/grade。
 2b. **深度安全扫描（可选 · 外部工具 SkillSpector）**：`check.py` 的 #0 只做密钥正则；当要查**提示注入 / 数据外泄 / 隐藏指令 / 供应链 / 过度授权 / MCP 越权**等 68 类模式时，叠加跑 [SkillSpector](https://github.com/NVIDIA/skillspector)（本机已装：`uv tool install`，需 Python 3.12/3.13）：
@@ -133,6 +136,7 @@ Skill 的命脉是两条，权重最高：
 |---|--------|------------|-----------|
 | 0 | **无硬编码密钥（安全红线）** | SKILL.md 及捆绑文件无 key/token/私钥/口令明文 | 出现 `sk-`/`AKIA`/私钥块/`password="..."` → **直接 FAIL**（skill 常被分发，泄露面更大）<br>⚠️ 测试夹具目录（`test/ tests/ fixtures/ golden/ snapshots/`）里的命中判 **WARN 不判 FAIL**——安全基准的假密钥是刻意载荷，误报会把红线变成摆设 |
 | 1 | **frontmatter 必填合法** | 有 `name`（小写+连字符 ≤64）+ `description` | 缺 name/description → FAIL；name 含大写/下划线/空格 → WARN |
+| 1b | **Codex 基础契约（可选）** | `--profile codex` 下字段白名单、name、description 与 TODO 均合规 | 扩展字段、连续连字符、description 尖括号或正文未完成 TODO → FAIL；默认 `agent` Profile 不启用，避免误伤跨宿主 Skill |
 | 2 | **description 含「何时用」** | 同时写清"做什么 + 何时/触发用"（这是被唤醒的唯一依据） | 只写"做什么"不写"何时用"；或太短没触发信号<br>⚠️ 机检只判"有没有信号词"，判不了准不准 —— 要判准不准走**触发力实测**（工作流 2c） |
 | 2b | **description ≤ 1024 字符** | 在上限内，触发稳定 | 超长，可能被截断 |
 | 3 | **SKILL.md ≤ 500 行** | 路由器不是图书馆，按需加载越短越准 | >500 行；分版本/分平台/长流程全塞一个文件 |
@@ -153,7 +157,8 @@ Skill 的命脉是两条，权重最高：
 （机检：PASS=1 / WARN=0.5 / FAIL=0，INFO 不计分。**按重要度加权**——安全红线 #0 与触发/减法核心项 #1/#2/#3/#4/#6/#10a 权重 1.5，标准项 #2b/#4b/#5/#11 为 1.0，加内容项 #7/#10b/#12 为 0.6。#0 命中按 FAIL 计且资损级，定性总评里应一票顶到「先改这条」。）
 
 **门禁口径**：score/grade 是质量参考，`gate` 才是自动化是否放行的真值。
-任何 FAIL、frontmatter 解析错误、文本读取错误都会让 gate=FAIL；多 Skill `--scan`
+任何 FAIL、frontmatter 解析错误、文本读取错误都会让 gate=FAIL；启用 `--profile codex` 时，
+Codex 基础契约同样纳入门禁；多 Skill `--scan`
 还会把断链、遍历错误和重复 name 纳入全局门禁。外部软链是否计入项目门禁，由调用方明确声明。
 
 ---
